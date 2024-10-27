@@ -88,6 +88,9 @@ pub fn main() !void {
         if (response) |r| {
             if (r.is_done()) {
                 logger.log("Request done", .{});
+
+                std.debug.print("{s}", .{r.body.items});
+
                 response = null;
             }
         } else if (rl.IsKeyPressed(rl.KEY_F)) {

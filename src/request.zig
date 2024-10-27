@@ -21,6 +21,7 @@ pub fn global_cleanup() void {
 pub const Response = struct {
     done_mutex: Thread.Mutex,
     done: bool,
+    body: std.ArrayList(u8),
 
     pub fn is_done(self: *Response) bool {
         self.done_mutex.lock();
@@ -31,11 +32,11 @@ pub const Response = struct {
 };
 
 fn write_callback(contents: *void, size: usize, nmemb: usize, userp: *void) usize {
-    std.debug.print("write_callback: {} {} {} {}\n", .{ contents, size, nmemb, userp });
-
-    const stdout = std.io.getStdOut();
+    std.debug.assert(size == 1);
     const slice: [*]u8 = @ptrCast(contents);
-    _ = stdout.writeAll(slice[0..nmemb]) catch unreachable;
+
+    const response: *Response = @ptrCast(@alignCast(userp));
+    response.body.appendSlice(slice[0..nmemb]) catch unreachable;
 
     return size * nmemb;
 }
@@ -43,6 +44,7 @@ fn write_callback(contents: *void, size: usize, nmemb: usize, userp: *void) usiz
 fn request_thread(handle: *curl.CURL, response: *Response) void {
     const ptr: *const void = @ptrCast(&write_callback);
     _ = curl.curl_easy_setopt(handle, curl.CURLOPT_WRITEFUNCTION, ptr);
+    _ = curl.curl_easy_setopt(handle, curl.CURLOPT_WRITEDATA, @as(*void, @ptrCast(response)));
 
     const res = curl.curl_easy_perform(handle);
     if (res != curl.CURLE_OK) {
@@ -59,6 +61,7 @@ pub fn request(allocator: mem.Allocator, url: [:0]const u8) !*Response {
     response.* = .{
         .done_mutex = .{},
         .done = false,
+        .body = std.ArrayList(u8).init(allocator),
     };
 
     const easy = curl.curl_easy_init() orelse return RequestError.CurlInitError;
