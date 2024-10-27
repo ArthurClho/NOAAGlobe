@@ -26,9 +26,9 @@ const Logger = struct {
         return Logger{ .entries = std.ArrayList(LogEntry).init(allocator), .allocator = allocator };
     }
 
-    pub fn log(self: *Logger, comptime fmt: []const u8, args: anytype) !void {
-        const string = try std.fmt.allocPrintZ(self.allocator, fmt, args);
-        try self.entries.append(LogEntry.init(string));
+    pub fn log(self: *Logger, comptime fmt: []const u8, args: anytype) void {
+        const string = std.fmt.allocPrintZ(self.allocator, fmt, args) catch unreachable;
+        self.entries.append(LogEntry.init(string)) catch unreachable;
     }
 
     pub fn draw(self: *Logger) void {
@@ -37,7 +37,7 @@ const Logger = struct {
         const now = rl.GetTime();
         while (self.entries.items.len > 0) {
             const entry = self.entries.items[0];
-            if (now - entry.time > 1.0) {
+            if (now - entry.time > 5.0) {
                 self.allocator.free(entry.message);
                 _ = self.entries.orderedRemove(0);
             } else {
@@ -59,6 +59,7 @@ pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     var logger = Logger.init(gpa.allocator());
 
+    rl.SetTraceLogLevel(rl.LOG_ERROR);
     rl.SetConfigFlags(rl.FLAG_MSAA_4X_HINT);
     rl.InitWindow(600, 600, "NOAAGlobe");
     rl.SetTargetFPS(60);
@@ -79,11 +80,19 @@ pub fn main() !void {
     const globe_position = rl.Vector3{ .x = 0.0, .y = 0.0, .z = 0.0 };
     model.transform = rl.MatrixMultiply(rl.MatrixRotateX(-90 * rl.DEG2RAD), model.transform);
 
+    var response: ?*request.Response = null;
+
     while (!rl.WindowShouldClose()) {
         model.transform = rl.MatrixMultiply(rl.MatrixRotateZ(-0.5 * rl.DEG2RAD), model.transform);
 
-        if (rl.IsKeyPressed(rl.KEY_F)) {
-            try logger.log("asdassdasdsad", .{});
+        if (response) |r| {
+            if (r.is_done()) {
+                logger.log("Request done", .{});
+                response = null;
+            }
+        } else if (rl.IsKeyPressed(rl.KEY_F)) {
+            logger.log("Sending request", .{});
+            response = try request.request(gpa.allocator(), "https://httpbin.org/get");
         }
 
         rl.BeginDrawing();
