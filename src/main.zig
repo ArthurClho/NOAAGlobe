@@ -3,6 +3,9 @@ const rl = @cImport({
     @cInclude("raylib.h");
     @cInclude("raymath.h");
 });
+const time = @cImport({
+    @cInclude("time.h");
+});
 
 const request = @import("./request.zig");
 
@@ -52,6 +55,26 @@ const Logger = struct {
     }
 };
 
+fn get_datetime() *time.tm {
+    var t: time.time_t = time.time(null);
+    return time.gmtime(&t);
+}
+
+fn nomads_request_url() [:0]u8 {
+    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    const a = gpa.allocator();
+
+    const base = "https://nomads.ncep.noaa.gov/cgi-bin/filter_gfs_1p00.pl";
+
+    const datetime = get_datetime();
+    const dir = std.fmt.allocPrintZ(a, "gfs.{}{}{}", .{ datetime.tm_year + 1900, datetime.tm_mon + 1, datetime.tm_mday }) catch unreachable;
+    const cycle = (@divFloor(datetime.tm_hour, 6) - 1) * 6;
+    const file = std.fmt.allocPrintZ(a, "gfs.t{}z.pgrb2.1p00.f000", .{cycle}) catch unreachable;
+
+    const string = std.fmt.allocPrintZ(a, "{s}?dir=%2F{s}%2F{}%2Fatmos&file={s}&var_TCDC=on&lev_entire_atmosphere=on", .{ base, dir, cycle, file }) catch unreachable;
+    return string;
+}
+
 pub fn main() !void {
     try request.global_init();
     defer request.global_cleanup();
@@ -89,13 +112,13 @@ pub fn main() !void {
             if (r.is_done()) {
                 logger.log("Request done", .{});
 
-                std.debug.print("{s}", .{r.body.items});
+                try std.io.getStdOut().writeAll(r.body.items);
 
                 response = null;
             }
         } else if (rl.IsKeyPressed(rl.KEY_F)) {
             logger.log("Sending request", .{});
-            response = try request.request(gpa.allocator(), "https://httpbin.org/get");
+            response = try request.request(gpa.allocator(), nomads_request_url());
         }
 
         rl.BeginDrawing();
