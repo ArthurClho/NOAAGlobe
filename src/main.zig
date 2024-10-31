@@ -34,13 +34,15 @@ const Logger = struct {
         self.entries.append(LogEntry.init(string)) catch unreachable;
     }
 
+    const MESSAGE_TIMEOUT = 5.0;
+
     pub fn draw(self: *Logger) void {
         const bottom: usize = @intCast(rl.GetRenderHeight());
 
         const now = rl.GetTime();
         while (self.entries.items.len > 0) {
             const entry = self.entries.items[0];
-            if (now - entry.time > 5.0) {
+            if (now - entry.time > MESSAGE_TIMEOUT) {
                 self.allocator.free(entry.message);
                 _ = self.entries.orderedRemove(0);
             } else {
@@ -50,7 +52,14 @@ const Logger = struct {
 
         for (self.entries.items, 0..) |entry, index| {
             const y = bottom - (index + 1) * 20;
-            rl.DrawText(entry.message, 0, @intCast(y), 20, rl.RAYWHITE);
+
+            var a: u8 = 255;
+            if (now - entry.time > MESSAGE_TIMEOUT - 1.0) {
+                a = 255 / 2;
+            }
+
+            const color = rl.Color{ .r = 255, .g = 255, .b = 255, .a = a };
+            rl.DrawText(entry.message, 0, @intCast(y), 20, color);
         }
     }
 };
