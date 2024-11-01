@@ -54,8 +54,9 @@ const Logger = struct {
             const y = bottom - (index + 1) * 20;
 
             var a: u8 = 255;
-            if (now - entry.time > MESSAGE_TIMEOUT - 1.0) {
-                a = 255 / 2;
+            const time_left = (entry.time + MESSAGE_TIMEOUT) - now;
+            if (time_left < 1.0) {
+                a = @intFromFloat(time_left * 255);
             }
 
             const color = rl.Color{ .r = 255, .g = 255, .b = 255, .a = a };
