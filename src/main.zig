@@ -31,7 +31,7 @@ const Logger = struct {
 
     pub fn log(self: *Logger, comptime fmt: []const u8, args: anytype) void {
         const string = std.fmt.allocPrintZ(self.allocator, fmt, args) catch unreachable;
-        self.entries.append(LogEntry.init(string)) catch unreachable;
+        self.entries.insert(0, LogEntry.init(string)) catch unreachable;
     }
 
     const MESSAGE_TIMEOUT = 5.0;
@@ -40,11 +40,16 @@ const Logger = struct {
         const bottom: usize = @intCast(rl.GetRenderHeight());
 
         const now = rl.GetTime();
-        while (self.entries.items.len > 0) {
-            const entry = self.entries.items[0];
+
+        // Reverse through the loop removing expired messages
+        var count = self.entries.items.len;
+        while (count > 0) : (count -= 1) {
+            const i = count - 1;
+            const entry = self.entries.items[i];
+
             if (now - entry.time > MESSAGE_TIMEOUT) {
                 self.allocator.free(entry.message);
-                _ = self.entries.orderedRemove(0);
+                _ = self.entries.orderedRemove(i);
             } else {
                 break;
             }
